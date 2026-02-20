@@ -142,3 +142,201 @@ Fields:
 - Consider microservice separation for payments, bookings, and notifications.
 - Plan for horizontal scalability (load balancers, caching layers, message queues).
 
+
+
+
+
+
+## Backend API Documentation 
+
+This section documents all backend modules, endpoints, request/response structure, and role-based access.
+APIs are grouped by functional modules, following production-level modular architecture.
+
+
+## 1️⃣ Authentication Module (with Refresh Token)
+Handles registration, login, OTP verification, password reset, and token refresh.
+
+**POST /auth/register**
+- Register a new Passenger.
+- Body: `{ "name": string, "email": string, "phone": string, "password": string, "national_id": string (optional) }`
+- Roles: Public
+- Response: `201 Created` + user info (excluding password)
+
+**POST /auth/login**
+- Authenticate user and issue **JWT access token** and **refresh token**.
+- Body: `{ "email_or_phone": string, "password": string }`
+- Roles: Public
+- Response: `200 OK`  
+  ```json
+  { "accessToken": "<JWT_ACCESS_TOKEN>", "refreshToken": "<JWT_REFRESH_TOKEN>" }
+  ```
+
+**POST /auth/refresh-token**
+- Refresh expired access token using refresh token.
+- Body: `{ "refreshToken": string }`
+- Roles: Public (requires valid refresh token)
+- Response: `200 OK`  
+  ```json
+  { "accessToken": "<NEW_JWT_ACCESS_TOKEN>", "refreshToken": "<NEW_REFRESH_TOKEN>" }
+  ```
+
+**POST /auth/logout**
+- Invalidate refresh token (logout).
+- Body: `{ "refreshToken": string }`
+- Roles: Authenticated User
+- Response: `200 OK` + confirmation
+
+**POST /auth/otp-verify**
+- Verify OTP for login or password reset.
+- Body: `{ "user_id": UUID, "otp": string }`
+- Roles: Public
+- Response: `200 OK`
+
+**POST /auth/password-reset**
+- Reset password using OTP.
+- Body: `{ "user_id": UUID, "new_password": string, "otp": string }`
+- Roles: Public
+- Response: `200 OK`
+
+
+## 2️⃣ User Management Module
+Manages users, profile updates, and admin-level user control.
+
+**GET /users/:id**
+- Fetch user profile.
+- Roles: Admin, SuperAdmin
+- Response: `200 OK` + user details
+
+**PATCH /users/:id**
+- Update user information or role/status.
+- Roles: Admin, SuperAdmin
+- Response: `200 OK` + updated user
+
+**DELETE /users/:id**
+- Deactivate or remove user.
+- Roles: SuperAdmin
+- Response: `204 No Content`
+
+## 3️⃣ Train & Route Management Module
+Handles all train, route, and schedule operations.
+
+**GET /trains**
+- List all trains with optional filters (source, destination, date)
+- Roles: Passenger, Admin, SuperAdmin
+- Response: `200 OK` + array of trains
+
+**POST /trains**
+- Add new train.
+- Roles: Admin, SuperAdmin
+- Response: `201 Created`
+
+**PATCH /trains/:id**
+- Update train info.
+- Roles: Admin, SuperAdmin
+- Response: `200 OK`
+
+**DELETE /trains/:id**
+- Remove train from system.
+- Roles: SuperAdmin
+- Response: `204 No Content`
+
+**GET /routes**
+- List all routes or filter by train.
+- Roles: Passenger, Admin, SuperAdmin
+- Response: `200 OK`
+
+**POST /routes**
+- Add new route.
+- Roles: Admin, SuperAdmin
+- Response: `201 Created`
+
+**GET /schedules**
+- Fetch schedules by train or date.
+- Roles: Passenger, Admin, SuperAdmin
+- Response: `200 OK`
+
+**POST /schedules**
+- Create new schedule entry.
+- Roles: Admin, SuperAdmin
+- Response: `201 Created`
+
+## 4️⃣ Coach & Seat Management Module
+Manages coaches, seat allocation, and availability.
+
+**GET /coaches/:train_id**
+- List all coaches for a train.
+- Roles: Passenger, Admin, SuperAdmin
+- Response: `200 OK`
+
+**GET /seats/:coach_id**
+- List all seats and status for a coach.
+- Roles: Passenger, Admin, SuperAdmin
+- Response: `200 OK` + seat status
+
+## 5️⃣ Booking Module
+Handles ticket creation, modification, and cancellation.
+
+**POST /bookings**
+- Create new booking.
+- Body: `{ "user_id": UUID, "schedule_id": int, "passengers": [{ "name": string, "age": int, "seat_id": int }] }`
+- Roles: Passenger
+- Response: `201 Created` + booking info
+
+**GET /bookings/:id**
+- Get booking details by booking ID.
+- Roles: Passenger (own), Admin, SuperAdmin
+- Response: `200 OK`
+
+**PATCH /bookings/:id/cancel**
+- Cancel booking before departure.
+- Roles: Passenger (own), Admin
+- Response: `200 OK` + refund details
+
+## 6️⃣ Payment Module
+Handles all payment processing and transaction logging.
+
+**POST /payments**
+- Process payment for a booking.
+- Body: `{ "booking_id": UUID, "amount": decimal, "payment_method": string }`
+- Roles: Passenger
+- Response: `200 OK` + payment status
+
+**GET /payments/:id/status**
+- Check payment status.
+- Roles: Passenger, Admin, SuperAdmin
+- Response: `200 OK`
+
+## 7️⃣ Ticket Module
+Generates and manages digital tickets.
+
+**GET /tickets/:pnr**
+- Retrieve ticket by PNR code.
+- Roles: Passenger (own), Admin, SuperAdmin
+- Response: `200 OK` + ticket info with QR code
+
+**GET /tickets/:pnr/pdf**
+- Download PDF version of ticket.
+- Roles: Passenger (own), Admin, SuperAdmin
+- Response: `200 OK` + PDF stream
+
+## 8️⃣ Refund Module
+Handles refunds and administrative overrides.
+
+**GET /refunds/:booking_id**
+- Check refund status.
+- Roles: Passenger (own), Admin
+- Response: `200 OK`
+
+**POST /refunds/:booking_id/process**
+- Admin processes or overrides refund.
+- Roles: Admin, SuperAdmin
+- Response: `200 OK` + refund processed
+
+## Notes for Developers
+- All endpoints validate input using DTOs or schemas.
+- JWT authentication required for protected routes.
+- Seat locking during payment prevents double booking.
+- Audit logs maintained for all sensitive admin actions.
+- High concurrency handled via transactions and Redis-based locks.
+
+
