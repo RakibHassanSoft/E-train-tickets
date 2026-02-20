@@ -3,7 +3,7 @@
 
 ## System Architecture
 
-![System Architecture](docs/erdac.png)
+![System Architecture](docs/erd.png)
 
 
 #  Railway E-Ticket Platform — Requirements Analysis
