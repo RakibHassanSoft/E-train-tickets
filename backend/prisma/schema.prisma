@@ -1,0 +1,427 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+// --- Enums for Status Tracking ---
+
+enum UserRole {
+  PASSENGER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum RefundStatus {
+  REQUESTED
+  PROCESSING
+  COMPLETED
+  FAILED
+  REJECTED
+}
+
+enum SeatType {
+  WINDOW
+  MIDDLE
+  AISLE
+}
+
+enum CoachType {
+  SLEEPER
+  ECONOMY
+}
+enum SeatManifestStatus {
+  AVAILABLE // No one is looking at it
+  HELD      // In someone's cart (temporary)
+  BOOKED    // Paid and confirmed
+  BLOCKED   // Out of service (broken seat)
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+enum EntityType {
+  USER
+  BOOKING
+  PAYMENT
+  REFUND
+  TRAIN
+  ROUTE
+  STATION
+  SEAT
+}
+
+// --- Models ---
+
+model User {
+  user_id       String         @id @default(uuid())
+  role          UserRole       @default(PASSENGER)
+  full_name     String
+  email         String         @unique
+  phone         String
+  password      String
+  is_verified   Boolean        @default(false)
+  is_active     Boolean        @default(false)
+  deleted_at   DateTime?
+  created_at    DateTime       @default(now())
+
+  bookings      Booking[]
+  refreshTokens RefreshToken[]
+// Named relations to distinguish between roles in a refund
+
+  requestedRefunds Refund[]    @relation("RefundRequester")
+  processedRefunds Refund[]    @relation("RefundAdmin")
+  auditLogs       AuditLog[]   @relation("UserAuditLogs")
+}
+
+model RefreshToken {
+  token_id      String   @id @default(uuid())
+  user_id       String
+  refresh_token String   @unique
+  issued_at     DateTime @default(now())
+  expires_at    DateTime
+  is_revoked    Boolean  @default(false)
+  created_at    DateTime @default(now())
+  
+  user          User     @relation(fields: [user_id], references: [user_id])
+}
+
+model Station {
+  station_id   String   @id @default(uuid())
+  station_code String   @unique // e.g., "STP" for St. Pancras. Industry standard.
+  station_name String
+  city         String
+  state        String
+  timezone     String   @default("UTC")
+  deleted_at   DateTime?
+
+
+  scheduleStops ScheduleStop[]
+  routeStations RouteStation[]
+  bookingsAsStart Booking[] @relation("StartStation")
+  bookingsAsEnd   Booking[] @relation("EndStation")
+  segmentsStart RouteSegment[] @relation("SegmentStart")
+  segmentsEnd   RouteSegment[] @relation("SegmentEnd")
+}
+
+model Route {
+  route_id     String   @id @default(uuid())
+  route_name   String
+  distance_km  Float
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+  deleted_at DateTime?
+
+
+  trains       Train[]
+  routeStations RouteStation[]
+  segments     RouteSegment[]
+}
+
+model RouteStation {
+  route_id            String
+  station_id          String
+  stop_sequence       Int
+  distance_from_start Float
+
+  route   Route   @relation(fields: [route_id], references: [route_id])
+  station Station @relation(fields: [station_id], references: [station_id])
+
+  @@id([route_id, station_id]) // Primary Key
+  @@unique([route_id, stop_sequence]) // Prevents duplicate stop numbers on one route
+}
+
+
+model RouteSegment {
+  segment_id       String   @id @default(uuid())
+  route_id         String
+  start_station_id String
+  end_station_id   String
+  price_modifier   Float    @default(1.0)
+  segment_order    Int
+  travel_time_mins Int
+  base_price       Decimal  @db.Decimal(12, 2) @default(0.00)
+
+  // Relations
+  route         Route          @relation(fields: [route_id], references: [route_id])
+  start_station Station        @relation("SegmentStart", fields: [start_station_id], references: [station_id])
+  end_station   Station        @relation("SegmentEnd", fields: [end_station_id], references: [station_id])
+  seatManifests SeatManifest[]
+
+  // ---COMPOSITE UNIQUE CONSTRAINT ---
+  // This allows other tables (like SeatManifest) to reference 
+  // the pair [segment_id, route_id] as a single unit.
+  @@unique([segment_id, route_id])
+  @@unique([route_id, segment_order])
+  @@unique([route_id, start_station_id, end_station_id])
+}
+
+model Train {
+  train_id      String   @id @default(uuid())
+  train_name    String
+  train_number  String   @unique
+  train_code  String   @unique
+  route_id      String
+  total_coaches Int
+  created_at   DateTime @default(now())
+  deleted_at   DateTime?
+  
+
+  route     Route      @relation(fields: [route_id], references: [route_id])
+  schedules TrainSchedule[]
+  coaches   Coach[]
+}
+
+model TrainSchedule {
+  schedule_id    String   @id @default(uuid())
+  route_id       String
+  train_id       String
+  trip_date      DateTime
+  departure_time DateTime
+  
+  train     Train     @relation(fields: [train_id], references: [train_id])
+  bookings  Booking[]
+  stops     ScheduleStop[]
+  manifests SeatManifest[]
+
+
+
+// ---COMPOSITE UNIQUE CONSTRAINT ---
+  // Ensures we can link a specific schedule to its route in the manifest.
+  @@unique([schedule_id, route_id])
+  // Indexes
+  @@index([trip_date]) // Vital for "Search Trains" feature
+  @@index([train_id, trip_date]) // Good for checking a specific train's availability
+}
+
+model ScheduleStop {
+  stop_id        String   @id @default(uuid())
+  schedule_id    String
+  station_id     String
+  arrival_time   DateTime
+  departure_time DateTime
+
+  schedule TrainSchedule @relation(fields: [schedule_id], references: [schedule_id])
+
+  station Station @relation(fields: [station_id], references: [station_id])
+
+
+}
+
+model Coach {
+  coach_id     String    @id @default(uuid())
+  train_id     String
+  coach_type   CoachType
+  coach_number String
+
+  train Train  @relation(fields: [train_id], references: [train_id])
+  seats Seat[]
+}
+
+model Seat {
+  seat_id     String   @id @default(uuid())
+  coach_id    String
+  seat_number String
+  seat_type   SeatType
+
+  coach     Coach          @relation(fields: [coach_id], references: [coach_id])
+  manifests SeatManifest[]
+
+}
+
+model FareConfiguration {
+  fare_id       String    @id @default(uuid())
+  coach_type    CoachType
+  price_markup  Decimal   @db.Decimal(5, 2) // e.g., 1.50 for 50% extra for Sleeper
+  demand_factor Decimal   @db.Decimal(5, 2) @default(1.00) // Dynamic multiplier
+  is_active     Boolean   @default(true)
+  created_at    DateTime  @default(now())
+}
+//The Job: If booking_status is still PENDING at expiry_time, the worker deletes the SeatManifest entries and marks the booking as EXPIRED.
+model Booking {
+  booking_id       String            @id @default(uuid())
+  user_id          String
+  schedule_id      String  
+  start_station_id String
+  end_station_id   String
+  pnr_code         String            @unique 
+  booking_status   BookingStatus     @default(PENDING)
+  booking_time     DateTime          @default(now())
+  expiry_time      DateTime
+  version Int @default(0)
+  unit_price    Decimal  @db.Decimal(12, 2) // Price per passenger at time of booking
+  total_amount  Decimal  @db.Decimal(12, 2) // unit_price * passenger_count
+  currency_code String   @default("USD") @db.VarChar(3) // Store currency for multi-currency support
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user             User              @relation(fields: [user_id], references: [user_id])
+  start_station    Station           @relation("StartStation", fields: [start_station_id], references: [station_id])
+  end_station      Station           @relation("EndStation", fields: [end_station_id], references: [station_id])
+  schedule         TrainSchedule     @relation(fields: [schedule_id], references: [schedule_id])
+  
+  passengers       BookingPassenger[]
+  tickets          Ticket[]
+  payments         Payment[]
+  refunds          Refund[]
+  seatManifests    SeatManifest[]
+
+  // Indexes
+  @@index([pnr_code])             // Essential for lookups
+  @@index([user_id])    
+  @@index([booking_status])     
+  @@index([booking_time(sort: Desc)]) 
+  @@index([booking_status, expiry_time])
+}
+
+model BookingPassenger {
+  passenger_id   String         @id @default(uuid())
+  booking_id     String
+  passenger_name String
+  age            Int
+  gender         Gender
+  deleted_at     DateTime?
+  
+  // Relations
+  ticket         Ticket?        // 1:1 back-relation
+  seatManifests  SeatManifest[]
+  booking        Booking?       @relation(fields: [booking_id], references: [booking_id], onDelete: Cascade)
+}
+
+model Ticket {
+  ticket_id     String           @id @default(uuid())
+  booking_id    String
+  qr_code       String
+  seat_details  String           // Snapshot of seat (e.g., "Coach A, Seat 12")
+  ticket_number String           @unique
+  issued_at     DateTime         @default(now())
+  passenger_id  String           @unique // Crucial: Ensures 1:1 relationship
+
+  // Relations
+  booking       Booking          @relation(fields: [booking_id], references: [booking_id])
+  passenger     BookingPassenger @relation(fields: [passenger_id], references: [passenger_id], onDelete: Cascade)
+}
+
+model Payment {
+  payment_id     String        @id @default(uuid())
+  booking_id     String
+  idempotency_key String        @unique // Prevents double-charging on retries
+  amount         Decimal       @db.Decimal(12, 2)
+  payment_method String
+  payment_status         PaymentStatus
+  transaction_ref String       @unique
+  paid_at        DateTime      @default(now())
+  currency       String   @default("USD") @db.VarChar(3) // Industry standard to include currency
+  provider_id    String?  // ID from Stripe/PayPal/Square to link external records
+  raw_response    Json?
+
+
+  booking Booking @relation(fields: [booking_id], references: [booking_id])
+  @@index([payment_status])
+}
+
+model Refund {
+  refund_id            String       @id @default(uuid())
+  booking_id           String
+  requested_by_user_id String
+  admin_id             String?    
+  idempotency_key String        @unique // Prevents double-refunding  
+  
+  amount_refunded      Decimal      @db.Decimal(12, 2)
+  cancellation_fee     Decimal      @db.Decimal(12, 2) @default(0.00) // Track the penalty
+  
+  reason               String
+  status               RefundStatus @default(REQUESTED)
+  processed_at         DateTime?
+  transaction_ref      String?      // The ID from Stripe/Bank for the actual money return
+
+  // Relations
+  booking   Booking @relation(fields: [booking_id], references: [booking_id])
+  requester User    @relation("RefundRequester", fields: [requested_by_user_id], references: [user_id])
+  admin     User?   @relation("RefundAdmin", fields: [admin_id], references: [user_id])
+  
+  // NEW: Link refund to specific manifests so we know which seats were freed
+  releasedSeats SeatManifest[] 
+}
+
+/* The SeatManifest model is the linchpin of our system, connecting seats to passengers, bookings, schedules, and route segments. It allows us to track the status of each seat for every segment of a passenger's journey, enabling features like partial cancellations and dynamic reassignments.
+
+The Strategy:
+Database Level: You already have expiry_time.
+Application Level: Use a Redis-based queue (like BullMQ) to schedule a "Cleanup Job" the moment a booking is created.
+The Job: If booking_status is still PENDING at expiry_time, the worker deletes the SeatManifest entries and marks the booking as EXPIRED.
+
+*/
+model SeatManifest {
+  manifest_id  String             @id @default(uuid())
+  seat_id      String
+  booking_id   String?
+  schedule_id  String
+  segment_id   String
+  route_id     String             
+  refund_id    String?
+  passenger_id String?
+  status       SeatManifestStatus
+  version      Int                @default(0)
+  updated_at   DateTime           @updatedAt
+
+  // Relations (keeping your existing logic)
+  segment      RouteSegment       @relation(fields: [segment_id, route_id], references: [segment_id, route_id])
+  schedule     TrainSchedule      @relation(fields: [schedule_id, route_id], references: [schedule_id, route_id])
+  passenger    BookingPassenger?  @relation(fields: [passenger_id], references: [passenger_id])
+  seat         Seat               @relation(fields: [seat_id], references: [seat_id])
+ booking   Booking?   @relation(fields: [booking_id], references: [booking_id], onDelete: SetNull)
+  refund       Refund?            @relation(fields: [refund_id], references: [refund_id])
+
+  // --- INDEXES ---
+  @@unique([seat_id, schedule_id, segment_id])
+  @@index([schedule_id, segment_id]) // Existing: For finding seats on a specific trip
+  @@index([status])                 // NEW: For fast filtering of AVAILABLE vs BOOKED
+  @@index([passenger_id])
+  @@index([route_id]) 
+  @@index([schedule_id, segment_id, status])
+}
+
+model AuditLog {
+  audit_id    String   @id @default(uuid())
+  user_id     String?  // No @relation here to prevent hard dependency
+  user_info   String?  // Optional: Store "Admin (admin@email.com)" as a snapshot
+  entity_type EntityType
+  entity_id   String
+  action      AuditAction
+  old_value   Json?
+  new_value   Json?
+  timestamp   DateTime @default(now())
+  ip_address  String?
+
+  user        User?    @relation("UserAuditLogs", fields: [user_id], references: [user_id])
+
+  @@index([entity_type, entity_id])
+}
