@@ -5,6 +5,185 @@ The goal is to follow a **structured development roadmap** so that APIs can be i
 
 ---
 
+## 📂 Folder Structure
+
+<details>
+<summary>Click to expand folder structure</summary>
+
+```bash
+src
+│
+├── config
+│   ├── env.ts
+│   ├── database.ts
+│   ├── redis.ts
+│   └── logger.ts
+│
+├── common
+│   ├── constants
+│   │   └── roles.ts
+│   │
+│   ├── middleware
+│   │   ├── auth.middleware.ts
+│   │   ├── role.middleware.ts
+│   │   ├── error.middleware.ts
+│   │   └── rateLimit.middleware.ts
+│   │
+│   ├── utils
+│   │   ├── generatePNR.ts
+│   │   ├── generateTicketNumber.ts
+│   │   ├── generateQRCode.ts
+│   │   ├── calculateFare.ts
+│   │   └── dateUtils.ts
+│   │
+│   └── types
+│       └── express.d.ts
+│
+├── modules
+│
+│   ├── auth
+│   │   ├── auth.controller.ts
+│   │   ├── auth.service.ts
+│   │   ├── auth.route.ts
+│   │   ├── auth.validation.ts
+│   │   └── auth.repository.ts
+│
+│   ├── users
+│   │   ├── user.controller.ts
+│   │   ├── user.service.ts
+│   │   ├── user.route.ts
+│   │   ├── user.validation.ts
+│   │   └── user.repository.ts
+│
+│   ├── stations
+│   │   ├── station.controller.ts
+│   │   ├── station.service.ts
+│   │   ├── station.route.ts
+│   │   ├── station.validation.ts
+│   │   └── station.repository.ts
+│
+│   ├── routes
+│   │   ├── route.controller.ts
+│   │   ├── route.service.ts
+│   │   ├── route.route.ts
+│   │   ├── route.validation.ts
+│   │   └── route.repository.ts
+│
+│   ├── routeStations
+│   │   ├── routeStation.controller.ts
+│   │   ├── routeStation.service.ts
+│   │   ├── routeStation.route.ts
+│   │   └── routeStation.repository.ts
+│
+│   ├── routeSegments
+│   │   ├── segment.controller.ts
+│   │   ├── segment.service.ts
+│   │   ├── segment.route.ts
+│   │   └── segment.repository.ts
+│
+│   ├── trains
+│   │   ├── train.controller.ts
+│   │   ├── train.service.ts
+│   │   ├── train.route.ts
+│   │   └── train.repository.ts
+│
+│   ├── coaches
+│   │   ├── coach.controller.ts
+│   │   ├── coach.service.ts
+│   │   ├── coach.route.ts
+│   │   └── coach.repository.ts
+│
+│   ├── seats
+│   │   ├── seat.controller.ts
+│   │   ├── seat.service.ts
+│   │   ├── seat.route.ts
+│   │   └── seat.repository.ts
+│
+│   ├── schedules
+│   │   ├── schedule.controller.ts
+│   │   ├── schedule.service.ts
+│   │   ├── schedule.route.ts
+│   │   └── schedule.repository.ts
+│
+│   ├── scheduleStops
+│   │   ├── scheduleStop.controller.ts
+│   │   ├── scheduleStop.service.ts
+│   │   ├── scheduleStop.route.ts
+│   │   └── scheduleStop.repository.ts
+│
+│   ├── seatManifest
+│   │   ├── manifest.service.ts
+│   │   ├── manifest.repository.ts
+│   │   └── manifest.generator.ts
+│
+│   ├── search
+│   │   ├── search.controller.ts
+│   │   ├── search.service.ts
+│   │   └── search.route.ts
+│
+│   ├── bookings
+│   │   ├── booking.controller.ts
+│   │   ├── booking.service.ts
+│   │   ├── booking.route.ts
+│   │   ├── booking.validation.ts
+│   │   └── booking.repository.ts
+│
+│   ├── passengers
+│   │   ├── passenger.service.ts
+│   │   └── passenger.repository.ts
+│
+│   ├── payments
+│   │   ├── payment.controller.ts
+│   │   ├── payment.service.ts
+│   │   ├── payment.route.ts
+│   │   └── payment.repository.ts
+│
+│   ├── tickets
+│   │   ├── ticket.service.ts
+│   │   ├── ticket.controller.ts
+│   │   └── ticket.repository.ts
+│
+│   ├── refunds
+│   │   ├── refund.controller.ts
+│   │   ├── refund.service.ts
+│   │   ├── refund.route.ts
+│   │   └── refund.repository.ts
+│
+│   ├── fareConfig
+│   │   ├── fare.controller.ts
+│   │   ├── fare.service.ts
+│   │   ├── fare.route.ts
+│   │   └── fare.repository.ts
+│
+│   ├── audit
+│   │   ├── audit.service.ts
+│   │   └── audit.repository.ts
+│
+│   └── admin
+│       ├── admin.controller.ts
+│       ├── admin.service.ts
+│       └── admin.route.ts
+│
+├── jobs
+│   ├── bookingExpiry.job.ts
+│   ├── seatRelease.job.ts
+│   └── queue.ts
+│
+├── prisma
+│   └── prisma.client.ts
+│
+├── routes
+│   └── index.ts
+│
+├── app.ts
+│
+└── server.ts
+```
+
+</details>
+
+---
+
 # 1. System Actors
 
 The system has **three primary roles**.
