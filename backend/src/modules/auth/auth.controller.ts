@@ -1,14 +1,53 @@
-import { Request, Response } from 'express';
-import * as authService from './auth.service';
+import { sendResponse } from "../../utils/sendResponse";
+import * as authService from "./auth.service";
 
-export const signup = async (req: Request, res: Response) => {
-  const { name, email, password } = req.body;
-  const user = await authService.signup(name, email, password);
-  res.status(201).json({ message: 'User created', user });
+export const register = async (req: any, res: any) => {
+  const user = await authService.registerUser(req.body);
+
+  sendResponse({
+    res,
+    statusCode: 201,
+    success: true,
+    message: "User registered successfully",
+    data: user,
+  });
 };
 
-export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
-  const data = await authService.login(email, password);
-  res.json(data);
+export const login = async (req: any, res: any) => {
+  const data = await authService.loginUser(req.body);
+
+  sendResponse({
+    res,
+    statusCode: 200,
+    success: true,
+    message: "User logged in successfully",
+    data: data,
+  });
+};
+
+export const refresh = async (req: any, res: any) => {
+  const { refreshToken } = req.body;
+
+  const token = await authService.refreshAccessToken(refreshToken);
+
+  sendResponse({
+    res,
+    statusCode: 200,
+    success: true,
+    data: token,
+    message: "Access token refreshed successfully",
+  });
+};
+
+export const logout = async (req: any, res: any) => {
+  const { refreshToken } = req.body;
+
+  await authService.logoutUser(refreshToken);
+
+  sendResponse({
+    res,
+    statusCode: 200,
+    success: true,
+    message: "User logged out successfully",
+  });
 };

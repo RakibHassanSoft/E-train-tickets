@@ -1,9 +1,15 @@
-import { Router } from 'express';
-import * as userController from './user.controller';
-import { authMiddleware } from '../auth/auth.middleware';
+import { Router } from "express";
 
-const router = Router();
+import * as controller from "./user.controller";
+import { authMiddleware } from "../auth/auth.middleware";
+import catchAsync from "../../utils/catchAsync";
 
-router.get('/', authMiddleware(['ADMIN']), userController.getUsers);
 
-export default router;
+const userRoutes = Router();
+
+
+userRoutes.get("/me", authMiddleware, catchAsync(controller.profile));
+
+userRoutes.put("/me", authMiddleware, catchAsync(controller.updateProfile));
+
+export default userRoutes;
